@@ -86,7 +86,7 @@ def animate(i):
 if __name__ == "__main__":
     security_system = IoVSecuritySystem()
     
-    vehnumber = 10
+    vehnumber = 1000
     routes = []
     route = []
     allAngleList = []
