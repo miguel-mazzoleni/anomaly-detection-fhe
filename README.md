@@ -1,8 +1,8 @@
-# Anomaly Detection of Botnets in Internet of Vehicles (IoV) Scenarios Integrating Homomorphic Encryption
+# Anomaly Detection of Botnets in Intelligent Transportation Systems (ITS) Scenarios Integrating Homomorphic Encryption
 
 ## Description
 
-This repository contains the code and resources related to the paper titled **"Anomaly Detection of Botnets in Internet of Vehicles (IoV) Scenarios Integrating Homomorphic Encryption"**. The objective of this work is to present an innovative approach for detecting anomalies in Internet of Vehicles (IoV) scenarios using Homomorphic Encryption, ensuring data privacy while detecting malicious botnet activities.
+This repository contains the code and resources related to the paper titled **"Anomaly Detection of Botnets in Intelligent Transportation Systems (ITS) Scenarios Integrating Homomorphic Encryption"**. The objective of this work is to present an innovative approach for detecting anomalies in Internet of Vehicles (IoV) scenarios using Homomorphic Encryption, ensuring data privacy while detecting malicious botnet activities.
 
 ## Introduction
 
