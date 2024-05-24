@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from shapely.geometry import Point
 from geographiclib.geodesic import Geodesic
+from phe import paillier
 
 geod = Geodesic.WGS84
 G = ox.graph_from_bbox(1.3763, 1.3007, 103.6492, 103.7840, network_type='drive')
