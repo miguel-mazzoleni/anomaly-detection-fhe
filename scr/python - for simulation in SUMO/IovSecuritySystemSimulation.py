@@ -1,5 +1,4 @@
         # Algorithm in Python for simulation carried out in SUMO (Simulation of Urban MObility)
-
 import traci
 import random
 import osmnx as ox
@@ -11,8 +10,9 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from shapely.geometry import Point
 from geographiclib.geodesic import Geodesic
-from phe import paillier
+from seal import *
 
+# Initialize geographic tools and graph
 geod = Geodesic.WGS84
 G = ox.graph_from_bbox(1.3763, 1.3007, 103.6492, 103.7840, network_type='drive')
 G = ox.add_edge_speeds(G)
@@ -21,6 +21,23 @@ G = ox.add_edge_travel_times(G)
 projected_graph = ox.project_graph(G, to_crs="EPSG:3395")
 Gc = ox.consolidate_intersections(projected_graph, dead_ends=True)
 edges = ox.graph_to_gdfs(ox.get_undirected(Gc), nodes=False)
+
+# Setup SEAL
+parms = EncryptionParameters(scheme_type.BFV)
+poly_modulus_degree = 4096
+parms.set_poly_modulus_degree(poly_modulus_degree)
+parms.set_coeff_modulus(CoeffModulus.BFVDefault(poly_modulus_degree))
+parms.set_plain_modulus(PlainModulus.Batching(poly_modulus_degree, 20))
+context = SEALContext(parms)
+
+keygen = KeyGenerator(context)
+public_key = keygen.public_key()
+secret_key = keygen.secret_key()
+relin_keys = keygen.relin_keys()
+encryptor = Encryptor(context, public_key)
+decryptor = Decryptor(context, secret_key)
+evaluator = Evaluator(context)
+encoder = IntegerEncoder(context)
 
 class IoVSecuritySystem:
     def __init__(self):
@@ -38,15 +55,38 @@ class IoVSecuritySystem:
         # Applying homomorphic encryption
         encrypted_data = []
         for value in raw_data:
-            encrypted_value = value + random.random()
+            plain_value = encoder.encode(int(value * 100))  # Example encoding, scaling by 100
+            encrypted_value = Ciphertext()
+            encryptor.encrypt(plain_value, encrypted_value)
             encrypted_data.append(encrypted_value)
         return encrypted_data
 
+    def decrypt_data(self, encrypted_data):
+        # Decrypting data
+        decrypted_data = []
+        for encrypted_value in encrypted_data:
+            plain_value = Plaintext()
+            decryptor.decrypt(encrypted_value, plain_value)
+            value = encoder.decode_int32(plain_value) / 100.0  # Example decoding, scaling back
+            decrypted_data.append(value)
+        return decrypted_data
+
     def detect_anomalies(self, encrypted_data):
         # Detecting anomalies in encrypted data
-        for value in encrypted_data:
-            if value < 0 or value > 50:
+        anomaly_threshold_high = encoder.encode(5000)  # Upper threshold (e.g., 50 scaled by 100)
+        anomaly_threshold_low = encoder.encode(0)  # Lower threshold (e.g., 0 scaled by 100)
+
+        for encrypted_value in encrypted_data:
+            is_anomaly = Ciphertext()
+            
+            evaluator.sub_plain(encrypted_value, anomaly_threshold_high, is_anomaly)
+            if decryptor.invariant_noise_budget(is_anomaly) <= 0:
                 return True  # Anomaly detected
+            
+            evaluator.sub_plain(encrypted_value, anomaly_threshold_low, is_anomaly)
+            if decryptor.invariant_noise_budget(is_anomaly) <= 0:
+                return True  # Anomaly detected
+        
         return False  # No anomalies detected
 
     def run_simulation(self):
@@ -141,9 +181,9 @@ if __name__ == "__main__":
             route_roadnames = []
             route_speed = []
 
-            ## iterate through roads (i.e. edges) in a route
+            # Iterate through roads (i.e. edges) in a route
             for irou in route:
-                incident_edges = edges[(edges['u_original']==irou) | (edges['v_original']==irou)]
+                incident_edges = edges[(edges['u_original'] == irou) | (edges['v_original'] == irou)]
                 for _, edge in incident_edges.fillna('').iterrows():
                     instantroad = edge['name']
                     instantspd = edge['speed_kph']
@@ -157,12 +197,12 @@ if __name__ == "__main__":
                     
                     TURN_SIG = "straight"
                     
-                    turnAngle = geod.Inverse(latlat,lonlon,y0,x0)
+                    turnAngle = geod.Inverse(latlat, lonlon, y0, x0)
 
                     if turnAngle['azi1'] > 45.0 and turnAngle['azi1'] < 135.0:
                         direzione.append("right")
                         TURN_SIG = "right"
-                    if (turnAngle['azi1'] > -135.0 and turnAngle['azi1'] < -45.0):
+                    if turnAngle['azi1'] > -135.0 and turnAngle['azi1'] < -45.0:
                         direzione.append("left")
                         TURN_SIG = "left"
                     
@@ -178,7 +218,7 @@ if __name__ == "__main__":
 
                 df = df.append(data, True)
                 
-                my_dict = {i:round(direzione.count(i)/len(direzione)*100.0,1) for i in direzione}
+                my_dict = {i: round(direzione.count(i) / len(direzione) * 100.0, 1) for i in direzione}
                 print("vehID: ", iroute, " Total route length: ", lor, " km. ", "TurnRatio: ", my_dict)
 
         except:
