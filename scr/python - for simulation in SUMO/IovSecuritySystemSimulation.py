@@ -1,4 +1,4 @@
-        # Algorithm in Python for simulation carried out in SUMO (Simulation of Urban MObility)
+# Algorithm in Python for simulation carried out in SUMO (Simulation of Urban MObility)
 import traci
 import random
 import osmnx as ox
@@ -22,12 +22,11 @@ projected_graph = ox.project_graph(G, to_crs="EPSG:3395")
 Gc = ox.consolidate_intersections(projected_graph, dead_ends=True)
 edges = ox.graph_to_gdfs(ox.get_undirected(Gc), nodes=False)
 
-# Setup SEAL
-parms = EncryptionParameters(scheme_type.BFV)
-poly_modulus_degree = 4096
+# Setup SEAL with CKKS
+parms = EncryptionParameters(scheme_type.CKKS)
+poly_modulus_degree = 8192
 parms.set_poly_modulus_degree(poly_modulus_degree)
-parms.set_coeff_modulus(CoeffModulus.BFVDefault(poly_modulus_degree))
-parms.set_plain_modulus(PlainModulus.Batching(poly_modulus_degree, 20))
+parms.set_coeff_modulus(CoeffModulus.Create(poly_modulus_degree, [60, 40, 40, 60]))
 context = SEALContext(parms)
 
 keygen = KeyGenerator(context)
@@ -37,7 +36,7 @@ relin_keys = keygen.relin_keys()
 encryptor = Encryptor(context, public_key)
 decryptor = Decryptor(context, secret_key)
 evaluator = Evaluator(context)
-encoder = IntegerEncoder(context)
+encoder = CKKSEncoder(context)
 
 class IoVSecuritySystem:
     def __init__(self):
@@ -55,9 +54,9 @@ class IoVSecuritySystem:
         # Applying homomorphic encryption
         encrypted_data = []
         for value in raw_data:
-            plain_value = encoder.encode(int(value * 100))  # Example encoding, scaling by 100
+            plain_value = DoubleVector([value])
             encrypted_value = Ciphertext()
-            encryptor.encrypt(plain_value, encrypted_value)
+            encryptor.encrypt(encoder.encode(plain_value), encrypted_value)
             encrypted_data.append(encrypted_value)
         return encrypted_data
 
@@ -67,24 +66,26 @@ class IoVSecuritySystem:
         for encrypted_value in encrypted_data:
             plain_value = Plaintext()
             decryptor.decrypt(encrypted_value, plain_value)
-            value = encoder.decode_int32(plain_value) / 100.0  # Example decoding, scaling back
-            decrypted_data.append(value)
+            decoded_values = DoubleVector()
+            encoder.decode(plain_value, decoded_values)
+            decrypted_data.append(decoded_values[0])
         return decrypted_data
 
     def detect_anomalies(self, encrypted_data):
         # Detecting anomalies in encrypted data
-        anomaly_threshold_high = encoder.encode(5000)  # Upper threshold (e.g., 50 scaled by 100)
-        anomaly_threshold_low = encoder.encode(0)  # Lower threshold (e.g., 0 scaled by 100)
+        anomaly_threshold_high = encoder.encode(5000.0)  # Upper threshold (e.g., 5000.0)
+        anomaly_threshold_low = encoder.encode(0.0)  # Lower threshold (e.g., 0.0)
 
         for encrypted_value in encrypted_data:
-            is_anomaly = Ciphertext()
-            
-            evaluator.sub_plain(encrypted_value, anomaly_threshold_high, is_anomaly)
-            if decryptor.invariant_noise_budget(is_anomaly) <= 0:
+            is_anomaly_high = Ciphertext()
+            is_anomaly_low = Ciphertext()
+
+            evaluator.sub_plain(encrypted_value, anomaly_threshold_high, is_anomaly_high)
+            if decryptor.invariant_noise_budget(is_anomaly_high) <= 0:
                 return True  # Anomaly detected
             
-            evaluator.sub_plain(encrypted_value, anomaly_threshold_low, is_anomaly)
-            if decryptor.invariant_noise_budget(is_anomaly) <= 0:
+            evaluator.sub_plain(encrypted_value, anomaly_threshold_low, is_anomaly_low)
+            if decryptor.invariant_noise_budget(is_anomaly_low) <= 0:
                 return True  # Anomaly detected
         
         return False  # No anomalies detected
@@ -118,8 +119,8 @@ def animate(i):
         # Therefore we need to use try except with continue construction
         try:
             # Try to plot a scatter plot
-            x_j = route_coorindates[j][i][0]
-            y_j = route_coorindates[j][i][1]
+            x_j = route_coordinates[j][i][0]
+            y_j = route_coordinates[j][i][1]
             scatter_list[j].set_offsets(np.c_[x_j, y_j])
         except:
             continue
@@ -139,10 +140,6 @@ if __name__ == "__main__":
     direzione = []
     route_roadnames = []
     route_speed = []
-
-    LEFT_SIG = ""
-    STRAIGHT_SIG = ""
-    RIGHT_SIG = ""
 
     columns = ['vehID', 'subroute', 'speed', 'turn', 'angle', 'lengthOfSubroute']
     data = []
@@ -230,7 +227,7 @@ if __name__ == "__main__":
         all_route_roadnames.append(route_roadnames)
         all_route_speeds.append(route_speed)
 
-    route_coorindates = []
+    route_coordinates = []
 
     for rou in routes:
         points = []
