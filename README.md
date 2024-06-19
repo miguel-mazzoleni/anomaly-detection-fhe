@@ -1,4 +1,4 @@
-# Anomaly Detection of Botnets in Intelligent Transportation Systems (ITS) Scenarios Integrating Homomorphic Encryption
+# Anomaly Detection of Botnets in Intelligent Transportation System Scenarios Integrating Homomorphic Encryption
 
 ## Description
 
